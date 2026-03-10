@@ -92,14 +92,14 @@ Use the FastAPI dev command:
 
 - temperature: measured temperature
 
-
+```text
 
 ## Project Structure
 
 fastapi-sensor-api/
-├── main.py#FastAPI application
-├── requirements.txt#Python dependencies
-└── README.md#Documentation
+├── main.py             # FastAPI application
+├── requirements.txt    # Python dependencies
+└── README.md           # Documentation
 
 
 ## Notes
