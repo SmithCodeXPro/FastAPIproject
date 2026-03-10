@@ -74,7 +74,7 @@ Use the FastAPI dev command:
 - Retrieve all sensors.
 
     Response:
-
+```bash
     [
     {
         "id": 1,
@@ -87,7 +87,7 @@ Use the FastAPI dev command:
         "temperature": 32.0
     }
     ]
-
+```
 - id: unique sensor identifier
 
 - temperature: measured temperature
