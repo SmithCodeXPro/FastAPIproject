@@ -1,3 +1,4 @@
+</> Markdown
 # FastAPI Sensor API
 
 A simple API to manage sensors using FastAPI and SQLite.
