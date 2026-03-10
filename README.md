@@ -29,15 +29,15 @@ pip install -r requirements.txt
 ```
 - requirements.txt contains:
 ```bash
-    fastapi[standard]==0.135.1
-    pydantic==2.12.5
+fastapi[standard]==0.135.1
+pydantic==2.12.5
 ```
 
 4. **Run the server** 
 
 Use the FastAPI dev command: 
 ```bash
-   fastapi dev main.py
+fastapi dev main.py
 ```
 
 - API will be available at: http://127.0.0.1:8000
