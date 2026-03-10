@@ -1,4 +1,3 @@
-</> Markdown
 # FastAPI Sensor API
 
 A simple API to manage sensors using FastAPI and SQLite.
@@ -98,9 +97,9 @@ Use the FastAPI dev command:
 ## Project Structure
 
 fastapi-sensor-api/
-├── main.py          # FastAPI application
+├── main.py # FastAPI application
 ├── requirements.txt # Python dependencies
-└── README.md        # Documentation
+└── README.md # Documentation
 
 
 ## Notes
