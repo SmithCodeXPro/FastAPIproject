@@ -8,37 +8,37 @@ This API allows you to:
 - Retrieve all sensors (GET `/sensor`)
 - Detect alerts when temperature exceeds 30°C
 
-
+---
 
 ## Installation
 
 1. **Clone the repository**
-
+```bash
 git clone https://github.com/SmithCodeXPro/FastAPIproject.git
 cd FastAPIproject
-
+```
 2. **Create a virtual environment (recommended)**
-
+```bash
 python3 -m venv venv
 source venv/bin/activate  # Linux / macOS
 venv\Scripts\activate     # Windows
-
+```
 3. **Install dependencies**
-
+```bash
 pip install -r requirements.txt
-
+```
 - requirements.txt contains:
-
+```bash
     fastapi[standard]==0.135.1
     pydantic==2.12.5
-
+```
 
 4. **Run the server** 
 
 Use the FastAPI dev command: 
-
+```bash
    fastapi dev main.py
-
+```
 
 - API will be available at: http://127.0.0.1:8000
 
