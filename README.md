@@ -8,7 +8,7 @@ This API allows you to:
 - Retrieve all sensors (GET `/sensor`)
 - Detect alerts when temperature exceeds 30°C
 
----
+
 
 ## Installation
 
