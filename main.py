@@ -49,7 +49,7 @@ def init_db():
         with get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_sensor_name ON sensors(name) (
+                CREATE TABLE IF NOT EXISTS sensors (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
                     temperature REAL NOT NULL,
@@ -141,7 +141,7 @@ def get_all_sensors():
 # ----------------------
 @app.get("/sensor/{sensor_id}", response_model=SensorResponse)
 def get_sensors(sensor_id: int):
-    """Return sensor(s) by ID. Returns empty list if not found."""
+    """Return a single sensor by ID, or 404 if not found."""
 
     # Get sensor from database
     try:
@@ -150,7 +150,7 @@ def get_sensors(sensor_id: int):
 
             cursor.execute("SELECT id, name, temperature, timestamp FROM sensors where id = ?", (sensor_id,))
 
-            rows = cursor.fetchone()
+            row = cursor.fetchone()
 
             if not row:
                 raise HTTPException(status_code=404, detail="Sensor not found")
@@ -160,17 +160,12 @@ def get_sensors(sensor_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
     # Return sensor
-    sensors = [
-        {
-            "id": row[0],
-            "name": row[1],
-            "temperature": row[2],
-            "timestamp": row[3]
-        }
-        for row in rows
-    ]
-
-    return sensors
+    return {
+        "id": row[0],
+        "name": row[1],
+        "temperature": row[2],
+        "timestamp": row[3],
+    }
 
 # ----------------------
 # File sensor simulator: JSON file -> database
@@ -200,14 +195,14 @@ def run_file_sensor_simulator(file_path: Path = SENSOR_DATA_FILE) -> dict:
         with get_connection() as conn:
             cursor = conn.cursor()
             for item in data: # Convert JSON to Sensor object
-                if sensor = Sensor(**item): # Validate sensor data
-                    cursor.execute(
-                        "INSERT INTO sensors (name, temperature) VALUES (?, ?)",
-                        (item["name"], float(item["temperature"])),
-                    )
-                    stored += 1
-                    if float(item["temperature"]) > 30:
-                        alerts += 1
+                sensor = Sensor(**item) # Validate sensor data
+                cursor.execute(
+                    "INSERT INTO sensors (name, temperature) VALUES (?, ?)",
+                    (sensor.name, sensor.temperature),
+                )
+                stored += 1
+                if float(sensor.temperature) > 30:
+                    alerts += 1
             conn.commit()
     except (ValueError, TypeError) as e:
         raise HTTPException(status_code=400, detail=f"Invalid sensor data: {e}")
