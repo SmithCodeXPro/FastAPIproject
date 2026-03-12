@@ -1,0 +1,7 @@
+[
+  {"name": "sim-sensor-1", "temperature": 22.5},
+  {"name": "sim-sensor-2", "temperature": 28.3},
+  {"name": "sim-sensor-3", "temperature": 31.2},
+  {"name": "sim-sensor-4", "temperature": 25.0},
+  {"name": "sim-sensor-5", "temperature": 29.8}
+]

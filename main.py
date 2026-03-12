@@ -43,7 +43,8 @@ def init_db():
                 CREATE TABLE IF NOT EXISTS sensors (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
-                    temperature REAL NOT NULL
+                    temperature REAL NOT NULL,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             conn.commit()
@@ -91,14 +92,14 @@ def add_sensor(sensor: Sensor):
 # ----------------------
 # GET Sensors
 # ----------------------
-@app.get("/sensor", response_model=List[SensorResponse])
-def get_sensors():
+@app.get("/sensor/{sensor_id}", response_model=List[SensorResponse])
+def get_sensors(sensor_id: int):
 
     try:
         with get_connection() as conn:
             cursor = conn.cursor()
 
-            cursor.execute("SELECT id, name, temperature FROM sensors")
+            cursor.execute("SELECT id, name, temperature, timestamp FROM sensors where id = ?", (sensor_id,))
 
             rows = cursor.fetchall()
 
@@ -109,9 +110,11 @@ def get_sensors():
         {
             "id": row[0],
             "name": row[1],
-            "temperature": row[2]
+            "temperature": row[2],
+            "timestamp": row[3]
         }
         for row in rows
     ]
 
     return sensors
+
