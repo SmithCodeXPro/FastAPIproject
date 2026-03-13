@@ -33,10 +33,12 @@ class SensorResponse(Sensor):
 
 
 # ----------------------
-# Database (SQLite) Connection
+# Database (SQLite) Connection  - rows become dict-like
 # ----------------------
 def get_connection():
-    return sqlite3.connect(DATABASE)
+    conn = sqlite3.connect(DATABASE, check_same_thread=False)
+    conn.row_factory = sqlite3.Row  # rows become dict-like objects (for easier access)
+    return conn
 
 
 # ----------------------
@@ -82,7 +84,7 @@ app = FastAPI(lifespan=lifespan)
 # API Endpoints (HTTP Methods)
 
 # ----------------------
-# POST Sensor
+# POST Sensor (add a new sensor)
 # ----------------------
 @app.post("/sensor", status_code=201)
 def add_sensor(sensor: Sensor): 
@@ -94,22 +96,25 @@ def add_sensor(sensor: Sensor):
     try:
         with get_connection() as conn:
             cursor = conn.cursor()
-
             cursor.execute(
                 "INSERT INTO sensors (name, temperature) VALUES (?, ?)",
                 (sensor.name, sensor.temperature)
-            )
-
+            ) 
             conn.commit()
+            last_id = cursor.lastrowid
 
     # Return error if database operation fails
     except sqlite3.Error as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    # Return success message and alert
+    # Return success message and sensor details
     return {
         "message": "sensor stored",
-        "alert": alert
+        "id": last_id, # Get the last inserted row id (auto-incremented)
+        "name": sensor.name, # Get the sensor name
+        "temperature": sensor.temperature,
+        "timestamp": datetime.now(), # Get the current timestamp
+        "alert": alert, # Get the alert status (True if temperature > 30°C)  
     }
 
 # ----------------------
@@ -124,23 +129,19 @@ def get_all_sensors():
         with get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT id, name, temperature, timestamp FROM sensors ORDER BY id")
-            rows = cursor.fetchall()
+            rows = cursor.fetchall() # Get all rows from the result set 
+            return [SensorResponse(**dict(row)) for row in rows] # Convert sqlite3.Row to dict and then to SensorResponse object
+
     # Return error if database operation fails
     except sqlite3.Error as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-    # Return all sensors
-    return [
-        {"id": row[0], "name": row[1], "temperature": row[2], "timestamp": row[3]}
-        for row in rows
-    ]
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ----------------------
 # GET Sensor by ID
 # ----------------------
 @app.get("/sensor/{sensor_id}", response_model=SensorResponse)
-def get_sensors(sensor_id: int):
+def get_sensor_by_id(sensor_id: int):
     """Return a single sensor by ID, or 404 if not found."""
 
     # Get sensor from database
@@ -150,22 +151,14 @@ def get_sensors(sensor_id: int):
 
             cursor.execute("SELECT id, name, temperature, timestamp FROM sensors where id = ?", (sensor_id,))
 
-            row = cursor.fetchone()
-
+            row = cursor.fetchone() # Get the first row from the result set 
             if not row:
                 raise HTTPException(status_code=404, detail="Sensor not found")
+            return SensorResponse(**dict(row)) # Convert sqlite3.Row to dict and then to SensorResponse object (using Pydantic's **kwargs)
 
     # Return error if database operation fails
     except sqlite3.Error as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-    # Return sensor
-    return {
-        "id": row[0],
-        "name": row[1],
-        "temperature": row[2],
-        "timestamp": row[3],
-    }
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 # ----------------------
 # File sensor simulator: JSON file -> database
