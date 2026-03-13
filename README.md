@@ -1,109 +1,158 @@
 # FastAPI Sensor API
 
-A simple API to manage sensors using FastAPI and SQLite.
+A REST API to store and retrieve sensor temperature readings using FastAPI and SQLite.
 
-This API allows you to:
+## Features
 
-- Add a sensor (POST `/sensor`)
-- Retrieve all sensors (GET `/sensor`)
-- Detect alerts when temperature exceeds 30°C
+- **Add sensors** – POST sensor readings with name and temperature
+- **List all sensors** – GET all stored readings
+- **Get sensor by ID** – GET a single sensor by its ID
+- **Temperature alerts** – Automatic alert when temperature exceeds 30°C
+- **File sensor simulator** – Load batch sensor data from a JSON file
 
----
+## Tech Stack
+
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [Pydantic](https://docs.pydantic.dev/)
+- SQLite (built-in)
 
 ## Installation
 
-1. **Clone the repository**
+### 1. Clone the repository
 
+```bash
 git clone https://github.com/SmithCodeXPro/FastAPIproject.git
 cd FastAPIproject
+```
 
-2. **Create a virtual environment (recommended)**
+### 2. Create a virtual environment (recommended)
 
+```bash
 python3 -m venv venv
-source venv/bin/activate  # Linux / macOS
-venv\Scripts\activate     # Windows
+source venv/bin/activate   # Linux / macOS
+# venv\Scripts\activate   # Windows
+```
 
-3. **Install dependencies**
+### 3. Install dependencies
 
+```bash
 pip install -r requirements.txt
+```
 
-- requirements.txt contains:
+### 4. Run the server
 
-    fastapi[standard]==0.135.1
-    pydantic==2.12.5
+```bash
+fastapi dev main.py
+```
 
+- **API:** http://127.0.0.1:8000
+- **Swagger UI:** http://127.0.0.1:8000/docs
+- **ReDoc:** http://127.0.0.1:8000/redoc
 
-4. **Run the server** 
+## API Endpoints
 
-Use the FastAPI dev command: 
+### POST `/sensor`
 
-   fastapi dev main.py
+Add a new sensor reading.
 
+**Request:**
+```json
+{
+  "name": "sensor-1",
+  "temperature": 25.5
+}
+```
 
-- API will be available at: http://127.0.0.1:8000
+**Response (201):**
+```json
+{
+  "message": "sensor stored",
+  "id": 1,
+  "name": "sensor-1",
+  "temperature": 25.5,
+  "timestamp": "2024-03-12T10:30:00",
+  "alert": false
+}
+```
 
-- Swagger UI documentation: http://127.0.0.1:8000/docs
+- `alert` is `true` when temperature > 30°C
 
-- ReDoc documentation: http://127.0.0.1:8000/redoc
+**Example:**
+```bash
+curl -X POST http://127.0.0.1:8000/sensor \
+  -H "Content-Type: application/json" \
+  -d '{"name": "sensor-1", "temperature": 25.5}'
+```
 
+### GET `/sensor`
 
-## Endpoints
+Retrieve all sensors.
 
-**POST /sensor**
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "name": "sensor-1",
+    "temperature": 25.5,
+    "timestamp": "2024-03-12T10:30:00"
+  }
+]
+```
 
-- Add a new sensor.
+**Example:**
+```bash
+curl http://127.0.0.1:8000/sensor
+```
 
-    Request JSON body:
+### GET `/sensor/{sensor_id}`
 
-        {
-        "name": "sensor 1",
-        "temperature": 25.5
-        }
+Retrieve a single sensor by ID. Returns 404 if not found.
 
-    Response:
+**Example:**
+```bash
+curl http://127.0.0.1:8000/sensor/1
+```
 
-        {
-        "message": "sensor stored",
-        "alert": false
-        }
+### POST `/simulate`
 
-- alert = true if temperature > 30°C.
+Load sensor data from `sensor_data.json` and insert all readings into the database.
 
-**GET /sensor**
+**sensor_data.json format:**
+```json
+[
+  {"name": "sim-sensor-1", "temperature": 22.5},
+  {"name": "sim-sensor-2", "temperature": 31.2}
+]
+```
 
-- Retrieve all sensors.
+**Response:**
+```json
+{
+  "message": "simulated 5 sensor(s) from file",
+  "stored": 5,
+  "alerts": 2
+}
+```
 
-    Response:
-
-    [
-    {
-        "id": 1,
-        "name": "sensor 1",
-        "temperature": 25.5
-    },
-    {
-        "id": 2,
-        "name": "sensor 2",
-        "temperature": 32.0
-    }
-    ]
-
-- id: unique sensor identifier
-
-- temperature: measured temperature
-
-
+**Example:**
+```bash
+curl -X POST http://127.0.0.1:8000/simulate
+```
 
 ## Project Structure
 
-fastapi-sensor-api/
-├── main.py          # FastAPI application
-├── requirements.txt # Python dependencies
-└── README.md        # Documentation
-
+```
+FastAPIproject/
+├── main.py           # FastAPI application
+├── sensor_data.json  # Sample data for /simulate
+├── sensors.db        # SQLite database (created on first run)
+├── requirements.txt  # Python dependencies
+└── README.md         # Documentation
+```
 
 ## Notes
 
-- This project uses SQLite, which is built into Python. No extra database setup is needed.
-
-- The API is ready to run locally and is lightweight for testing or small deployments.
+- SQLite requires no separate database setup.
+- The database file `sensors.db` is created automatically on first run.
+- The API is lightweight and suitable for local use or small deployments.
