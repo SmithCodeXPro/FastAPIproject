@@ -31,6 +31,13 @@ class SensorResponse(Sensor):
     id: int
     timestamp: datetime | None = None
 
+# ------------------------
+# Pydantic Update Model (update body)
+# ------------------------
+class SensorUpdate(BaseModel):
+    name: str | None = None
+    temperature: float | None = None
+
 
 # ----------------------
 # Database (SQLite) Connection  - rows become dict-like
@@ -161,8 +168,17 @@ def get_sensor_by_id(sensor_id: int):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+# -------------------------
+# DELETE Sensor by ID
+# -------------------------
 @app.delete("/sensor/{sensor_id}", response_model=dict)
+
 def delete_sensor_by_id(sensor_id: int):
+    """Delete the sensor with the given ID, or return 404 if not found.
+    
+    Returns a message and the deleted sensor data on success.
+    """
+    
     try:
         with get_connection() as conn:
             cursor = conn.cursor()
@@ -183,6 +199,56 @@ def delete_sensor_by_id(sensor_id: int):
     except sqlite3.Error as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
+
+# -------------------------
+# UPDATE Sensor by ID
+# -------------------------
+@app.put("/sensor/{sensor_id}", response_model=dict)
+def update_sensor_by_id(
+    sensor_id: int,
+    sensor_update: SensorUpdate
+):
+    """
+    Update the sensor with the given ID using the provided fields (name and/or temperature).
+    Only fields provided in the request body will be updated; others remain unchanged.
+    Returns a message and the updated sensor data on success.
+    Raises 404 if the sensor is not found.
+    """
+
+
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Fetch current sensor (to verify existence and for response)
+            cursor.execute("SELECT id, name, temperature, timestamp FROM sensors WHERE id = ?", (sensor_id,))
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Sensor not found")
+
+            # Get new values, fallback to old values if not provided
+            current_data = dict(row)
+            new_name = sensor_update.name if sensor_update.name is not None else current_data["name"]
+            new_temperature = sensor_update.temperature if sensor_update.temperature is not None else current_data["temperature"]
+
+            # Update the sensor record
+            cursor.execute(
+                "UPDATE sensors SET name = ?, temperature = ? WHERE id = ?",
+                (new_name, new_temperature, sensor_id),
+            )
+            conn.commit()
+
+            # Fetch the updated row to return fresh data (including updated timestamp, if any)
+            cursor.execute("SELECT id, name, temperature, timestamp FROM sensors WHERE id = ?", (sensor_id,))
+            updated_row = cursor.fetchone()
+            updated_data = dict(updated_row) if updated_row else current_data
+
+            return {
+                "message": "Sensor updated",
+                "sensor": SensorResponse(**updated_data)
+            }
+    except sqlite3.Error as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ----------------------
