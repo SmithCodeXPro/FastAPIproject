@@ -160,6 +160,31 @@ def get_sensor_by_id(sensor_id: int):
     except sqlite3.Error as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
+
+@app.delete("/sensor/{sensor_id}", response_model=dict)
+def delete_sensor_by_id(sensor_id: int):
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            # First fetch the sensor to make sure it exists (and for response)
+            cursor.execute("SELECT id, name, temperature, timestamp FROM sensors WHERE id = ?", (sensor_id,))
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Sensor not found")
+            sensor_data = dict(row)
+
+            cursor.execute("DELETE FROM sensors WHERE id = ?", (sensor_id,))
+            conn.commit()
+
+            return {
+                "message": "Sensor deleted",
+                "sensor": SensorResponse(**sensor_data)
+            }
+    except sqlite3.Error as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+
 # ----------------------
 # File sensor simulator: JSON file -> database
 # ----------------------
