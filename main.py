@@ -86,6 +86,17 @@ async def lifespan(app: FastAPI):
 # Register lifespan handler with the app
 app = FastAPI(lifespan=lifespan) 
 
+# ----------------------
+# Health check
+# ----------------------
+@app.get("/health")
+def health_check():
+    try:
+        with get_connection() as conn:
+            conn.execute("SELECT 1")
+        return {"status": "ok","database": "reachable"}
+    except sqlite3.Error:
+        raise HTTPException(status_code=500, detail="Database not reachable")
 
 
 # API Endpoints (HTTP Methods)
