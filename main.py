@@ -43,8 +43,8 @@ class SensorResponse(Sensor):
 # Pydantic Update Model (update body)
 # ------------------------
 class SensorUpdate(BaseModel):
-    name: str | None = Field(None, min_length=1, max_length=100)
-    temperature: float | None = Field(None, ge=-50, le=150)
+    name: str = Field(default=None, min_length=1, max_length=100) | None
+    temperature: float = Field(default=None, ge=-50, le=150) | None
 
 # ----------------------
 # Database (SQLite) Connection  - rows become dict-like
