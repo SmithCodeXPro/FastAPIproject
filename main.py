@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import List
 import sqlite3
 import json
@@ -21,8 +21,16 @@ SENSOR_DATA_FILE = Path(__file__).parent / "sensor_data.json" # Source for /simu
 # Pydantic Model (request body)
 # ----------------------
 class Sensor(BaseModel):
-    name: str
-    temperature: float
+    name: str = Field(..., min_length=1, max_length=100)
+    temperature: float = Field(..., ge=-50, le=150)
+
+    # Sensor request model for incoming data
+    @field_validator("name")
+    @classmethod
+    def no_forbidden_names(cls, v: str) -> str:
+        if v.lower() in {"test", "invalid"}:
+            raise ValueError("This sensor name is not allowed")
+        return v
 
 # ----------------------
 # Pydantic Response Model (response body)
@@ -35,9 +43,8 @@ class SensorResponse(Sensor):
 # Pydantic Update Model (update body)
 # ------------------------
 class SensorUpdate(BaseModel):
-    name: str | None = None
-    temperature: float | None = None
-
+    name: str | None = Field(None, min_length=1, max_length=100)
+    temperature: float | None = Field(None, ge=-50, le=150)
 
 # ----------------------
 # Database (SQLite) Connection  - rows become dict-like
