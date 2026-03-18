@@ -146,20 +146,52 @@ def add_sensor(sensor: Sensor):
 # GET All Sensors
 # ----------------------
 @app.get("/sensor", response_model=List[SensorResponse])
-def get_all_sensors(): 
-    """Return all stored sensors. Returns empty list if no sensors are found."""
+def get_all_sensors(
+    name: str | None = None,
+    min_temperature: float | None = None,
+    max_temperature: float | None = None,
+):
+    """Return filtered sensor readings.
 
-    # Get all sensors from database
+    - name: filter by exact sensor name (case-sensitive). Use partial match with SQL `LIKE` by adjusting this code.
+    - min_temperature: include sensors with temperature >= this value.
+    - max_temperature: include sensors with temperature <= this value.
+
+    Returns an empty list if no sensors are found.
+    """
+
+    # Build SQL query and params based on filters
+    query = "SELECT id, name, temperature, timestamp FROM sensors"
+    conditions = []
+    params = []
+
+    if name is not None:
+        conditions.append("name = ?")
+        params.append(name)
+
+    if min_temperature is not None:
+        conditions.append("temperature >= ?")
+        params.append(min_temperature)
+
+    if max_temperature is not None:
+        conditions.append("temperature <= ?")
+        params.append(max_temperature)
+
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+
+    query += " ORDER BY id"
+
     try:
         with get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, name, temperature, timestamp FROM sensors ORDER BY id")
-            rows = cursor.fetchall() # Get all rows from the result set 
-            return [SensorResponse(**dict(row)) for row in rows] # Convert sqlite3.Row to dict and then to SensorResponse object
+            cursor.execute(query, tuple(params))
+            rows = cursor.fetchall()
+            return [SensorResponse(**dict(row)) for row in rows]
 
-    # Return error if database operation fails
     except sqlite3.Error as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 # ----------------------
