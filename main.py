@@ -193,6 +193,55 @@ def get_all_sensors(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ----------------------
+# GET Sensor Statistics
+# ----------------------
+@app.get("/sensor/stats")
+def get_sensor_statistics():
+    """Return aggregated statistics for all sensor readings."""
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT
+                    COUNT(*) AS total_readings,
+                    COUNT(DISTINCT name) AS unique_sensors,
+                    AVG(temperature) AS avg_temperature,
+                    MIN(temperature) AS min_temperature,
+                    MAX(temperature) AS max_temperature,
+                    SUM(CASE WHEN temperature > 30 THEN 1 ELSE 0 END) AS alert_count,
+                    MIN(timestamp) AS earliest_timestamp,
+                    MAX(timestamp) AS latest_timestamp
+                FROM sensors
+                """
+            )
+            row = cursor.fetchone()
+            if not row:
+                return {
+                    "total_readings": 0,
+                    "unique_sensors": 0,
+                    "avg_temperature": None,
+                    "min_temperature": None,
+                    "max_temperature": None,
+                    "alert_count": 0,
+                    "earliest_timestamp": None,
+                    "latest_timestamp": None,
+                }
+
+            return {
+                "total_readings": row["total_readings"],
+                "unique_sensors": row["unique_sensors"],
+                "avg_temperature": row["avg_temperature"],
+                "min_temperature": row["min_temperature"],
+                "max_temperature": row["max_temperature"],
+                "alert_count": row["alert_count"],
+                "earliest_timestamp": row["earliest_timestamp"],
+                "latest_timestamp": row["latest_timestamp"],
+            }
+    except sqlite3.Error as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ----------------------
 # GET Sensor by ID
