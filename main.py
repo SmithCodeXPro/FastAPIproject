@@ -4,7 +4,7 @@ from typing import List
 import sqlite3 
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 
 """
@@ -37,7 +37,7 @@ class Sensor(BaseModel):
 # ----------------------
 class SensorResponse(Sensor):
     id: int
-    timestamp: datetime | None = None
+    timestamp: datetime | None = Field(default=None, description="UTC timestamp when sensor was recorded")
 
 # ------------------------
 # Pydantic Update Model (update body)
@@ -46,11 +46,44 @@ class SensorUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
     temperature: float | None = Field(default=None, ge=-50, le=150)
 
+
+# ------------------------
+# Pydantic Create Response Model (create response body)
+# ------------------------
+class SensorCreateResponse(BaseModel):
+    message: str
+    id: int
+    name: str
+    temperature: float
+    timestamp: datetime
+    alert: bool
+
+
+# ------------------------
+# Pydantic Message Response Model (message with sensor response body)
+# ------------------------
+class SensorMessageResponse(BaseModel):
+    message: str
+    sensor: SensorResponse
+
+
+# ------------------------
+# Timestamp Parsing Utility
+# ------------------------
+def parse_timestamp(row):
+    """Parse database row and convert timestamp string to UTC datetime object."""
+    data = dict(row)
+    if data.get("timestamp"):
+        # SQLite stores timestamps as 'YYYY-MM-DD HH:MM:SS' strings
+        # Parse and assume they're in UTC (since we store them that way)
+        data["timestamp"] = datetime.strptime(data["timestamp"], '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
+    return data
+
 # ----------------------
 # Database (SQLite) Connection  - rows become dict-like
 # ----------------------
 def get_connection():
-    conn = sqlite3.connect(DATABASE, check_same_thread=False)
+    conn = sqlite3.connect(DATABASE, check_same_thread=True) # Use check_same_thread=True for SQLite in FastAPI (default) to avoid issues with multiple threads
     conn.row_factory = sqlite3.Row  # rows become dict-like objects (for easier access)
     return conn
 
@@ -111,10 +144,10 @@ def health_check():
 # ----------------------
 # POST Sensor (add a new sensor)
 # ----------------------
-@app.post("/sensor", status_code=201)
+@app.post("/sensor", status_code=201, response_model=SensorCreateResponse)
 def add_sensor(sensor: Sensor): 
     """Add one sensor reading. alert=True if temperature > 30°C."""
-
+    
     alert = sensor.temperature > 30
 
     # Insert sensor into database
@@ -122,11 +155,19 @@ def add_sensor(sensor: Sensor):
         with get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO sensors (name, temperature) VALUES (?, ?)",
-                (sensor.name, sensor.temperature)
+                "INSERT INTO sensors (name, temperature, timestamp) VALUES (?, ?, ?)",
+                (sensor.name, sensor.temperature, datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S'))
             ) 
             conn.commit()
             last_id = cursor.lastrowid
+
+            # Fetch the inserted record to get the exact timestamp from database
+            cursor.execute("SELECT timestamp FROM sensors WHERE id = ?", (last_id,))
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=500, detail="Failed to retrieve timestamp")
+            
+            db_timestamp = parse_timestamp(row)["timestamp"]
 
     # Return error if database operation fails
     except sqlite3.Error as e:
@@ -134,11 +175,11 @@ def add_sensor(sensor: Sensor):
 
     # Return success message and sensor details
     return {
-        "message": "sensor stored",
+        "message": "sensor created",
         "id": last_id, # Get the last inserted row id (auto-incremented)
         "name": sensor.name, # Get the sensor name
         "temperature": sensor.temperature,
-        "timestamp": datetime.now(), # Get the current timestamp
+        "timestamp": db_timestamp, # Use the actual database timestamp
         "alert": alert, # Get the alert status (True if temperature > 30°C)  
     }
 
@@ -180,14 +221,14 @@ def get_all_sensors(
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
 
-    query += " ORDER BY id"
+    query += " ORDER BY timestamp DESC"
 
     try:
         with get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query, tuple(params))
             rows = cursor.fetchall()
-            return [SensorResponse(**dict(row)) for row in rows]
+            return [SensorResponse(**parse_timestamp(row)) for row in rows]
 
     except sqlite3.Error as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -236,8 +277,8 @@ def get_sensor_statistics():
                 "min_temperature": row["min_temperature"],
                 "max_temperature": row["max_temperature"],
                 "alert_count": row["alert_count"],
-                "earliest_timestamp": row["earliest_timestamp"],
-                "latest_timestamp": row["latest_timestamp"],
+                "earliest_timestamp": datetime.strptime(row["earliest_timestamp"], '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc) if row["earliest_timestamp"] else None,
+                "latest_timestamp": datetime.strptime(row["latest_timestamp"], '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc) if row["latest_timestamp"] else None,
             }
     except sqlite3.Error as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -260,7 +301,7 @@ def get_sensor_by_id(sensor_id: int):
             row = cursor.fetchone() # Get the first row from the result set 
             if not row:
                 raise HTTPException(status_code=404, detail="Sensor not found")
-            return SensorResponse(**dict(row)) # Convert sqlite3.Row to dict and then to SensorResponse object (using Pydantic's **kwargs)
+            return SensorResponse(**parse_timestamp(row)) # Convert sqlite3.Row to dict and then to SensorResponse object (using Pydantic's **kwargs)
 
     # Return error if database operation fails
     except sqlite3.Error as e:
@@ -270,7 +311,7 @@ def get_sensor_by_id(sensor_id: int):
 # -------------------------
 # DELETE Sensor by ID
 # -------------------------
-@app.delete("/sensor/{sensor_id}", response_model=dict)
+@app.delete("/sensor/{sensor_id}", response_model=SensorMessageResponse)
 
 def delete_sensor_by_id(sensor_id: int):
     """Delete the sensor with the given ID, or return 404 if not found.
@@ -286,7 +327,7 @@ def delete_sensor_by_id(sensor_id: int):
             row = cursor.fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="Sensor not found")
-            sensor_data = dict(row)
+            sensor_data = parse_timestamp(row)
 
             cursor.execute("DELETE FROM sensors WHERE id = ?", (sensor_id,))
             conn.commit()
@@ -302,7 +343,7 @@ def delete_sensor_by_id(sensor_id: int):
 # -------------------------
 # UPDATE Sensor by ID
 # -------------------------
-@app.put("/sensor/{sensor_id}", response_model=dict)
+@app.put("/sensor/{sensor_id}", response_model=SensorMessageResponse)
 def update_sensor_by_id(
     sensor_id: int,
     sensor_update: SensorUpdate
@@ -326,21 +367,21 @@ def update_sensor_by_id(
                 raise HTTPException(status_code=404, detail="Sensor not found")
 
             # Get new values, fallback to old values if not provided
-            current_data = dict(row)
+            current_data = parse_timestamp(row)
             new_name = sensor_update.name if sensor_update.name is not None else current_data["name"]
             new_temperature = sensor_update.temperature if sensor_update.temperature is not None else current_data["temperature"]
 
             # Update the sensor record
             cursor.execute(
-                "UPDATE sensors SET name = ?, temperature = ? WHERE id = ?",
-                (new_name, new_temperature, sensor_id),
+                "UPDATE sensors SET name = ?, temperature = ?, timestamp = ? WHERE id = ?",
+                (new_name, new_temperature, datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S'), sensor_id),
             )
             conn.commit()
 
             # Fetch the updated row to return fresh data (including updated timestamp, if any)
             cursor.execute("SELECT id, name, temperature, timestamp FROM sensors WHERE id = ?", (sensor_id,))
             updated_row = cursor.fetchone()
-            updated_data = dict(updated_row) if updated_row else current_data
+            updated_data = parse_timestamp(updated_row) if updated_row else current_data
 
             return {
                 "message": "Sensor updated",
@@ -377,15 +418,15 @@ def run_file_sensor_simulator(file_path: Path = SENSOR_DATA_FILE) -> dict:
     try:
         with get_connection() as conn:
             cursor = conn.cursor()
-            for item in data: # Convert JSON to Sensor object
-                sensor = Sensor(**item) # Validate sensor data
-                cursor.execute(
-                    "INSERT INTO sensors (name, temperature) VALUES (?, ?)",
-                    (sensor.name, sensor.temperature),
-                )
-                stored += 1
-                if float(sensor.temperature) > 30:
-                    alerts += 1
+            sensors = [Sensor(**item) for item in data]
+
+            cursor.executemany(
+                "INSERT INTO sensors (name, temperature, timestamp) VALUES (?, ?, ?)",
+                [(s.name, s.temperature, datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')) for s in sensors]
+            )
+
+            stored = len(sensors)
+            alerts = sum(1 for s in sensors if s.temperature > 30)
             conn.commit()
     except (ValueError, TypeError) as e:
         raise HTTPException(status_code=400, detail=f"Invalid sensor data: {e}")
