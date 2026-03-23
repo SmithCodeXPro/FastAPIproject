@@ -1,3 +1,4 @@
+import sqlite3
 from fastapi import FastAPI, HTTPException
 from contextlib import asynccontextmanager
 
@@ -37,5 +38,5 @@ def health_check():
         with get_connection() as conn:
             conn.execute("SELECT 1")
         return {"status": "ok","database": "reachable"}
-    except Exception:  # sqlite3.Error might not be imported, but Exception is fine
+    except sqlite3.Error:
         raise HTTPException(status_code=500, detail="Database not reachable")

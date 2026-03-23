@@ -1,21 +1,14 @@
 from fastapi import APIRouter
 from typing import List
-
-from schemas import Sensor, SensorResponse, SensorUpdate, SensorCreateResponse, SensorMessageResponse
-from service import create_sensor, get_sensors, get_sensor_stats, get_sensor, delete_sensor, update_sensor, simulate_sensors_from_file
 from pathlib import Path
 
-# Create router instance
+from schemas import Sensor, SensorResponse, SensorUpdate, SensorCreateResponse, SensorMessageResponse
+from service import create_sensor, get_sensors, get_sensor_stats, get_sensor, delete_sensor, update_sensor
+from service import simulate_sensors_from_file as _simulate_sensors_from_file
+
 router = APIRouter()
 
-# Path to sensor data file (relative to main.py, but since router is imported, adjust if needed)
-# Actually, since main.py is in the same directory, and routers is subdir, but Path(__file__).parent.parent / "sensor_data.json"
-# But to keep it simple, since it's used in simulate, and main.py has it, perhaps pass it or define here.
-# For now, define it here as in main.py.
-
 SENSOR_DATA_FILE = Path(__file__).parent.parent / "sensor_data.json"
-
-# API Endpoints (HTTP Methods)
 
 # ----------------------
 # POST Sensor (add a new sensor)
@@ -91,6 +84,6 @@ def update_sensor_by_id(
 # POST Simulate: JSON file -> database
 # ----------------------
 @router.post("/simulate")
-def simulate_sensors_from_file():
+def simulate_sensors():
     """Load sensor_data.json and store all readings in the database."""
-    return simulate_sensors_from_file(SENSOR_DATA_FILE)
+    return _simulate_sensors_from_file(SENSOR_DATA_FILE)
