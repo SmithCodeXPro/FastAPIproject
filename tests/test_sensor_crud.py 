@@ -1,0 +1,75 @@
+import pytest
+from fastapi.testclient import TestClient
+
+import db as db_module
+from main import app
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    test_db = tmp_path / "test_sensors.db"
+    monkeypatch.setattr(db_module, "DATABASE", test_db)
+
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+def test_crud_sensor_flow(client):
+    create_response = client.post(
+        "/sensor",
+        json={"name": "sensor-1", "temperature": 25.5},
+    )
+    assert create_response.status_code == 201
+
+    created = create_response.json()
+    sensor_id = created["id"]
+    assert created["message"] == "sensor created"
+    assert created["name"] == "sensor-1"
+    assert created["temperature"] == 25.5
+    assert created["alert"] is False
+    assert "timestamp" in created
+
+    read_response = client.get(f"/sensor/{sensor_id}")
+    assert read_response.status_code == 200
+    assert read_response.json()["name"] == "sensor-1"
+
+    list_response = client.get("/sensor")
+    assert list_response.status_code == 200
+    assert len(list_response.json()) == 1
+
+    update_response = client.put(
+        f"/sensor/{sensor_id}",
+        json={"temperature": 33.0},
+    )
+    assert update_response.status_code == 200
+
+    updated = update_response.json()
+    assert updated["message"] == "Sensor updated"
+    assert updated["sensor"]["id"] == sensor_id
+    assert updated["sensor"]["temperature"] == 33.0
+    assert updated["sensor"]["name"] == "sensor-1"
+
+    delete_response = client.delete(f"/sensor/{sensor_id}")
+    assert delete_response.status_code == 200
+
+    deleted = delete_response.json()
+    assert deleted["message"] == "Sensor deleted"
+    assert deleted["sensor"]["id"] == sensor_id
+
+    missing_response = client.get(f"/sensor/{sensor_id}")
+    assert missing_response.status_code == 404
+
+
+def test_filter_and_validation(client):
+    first = client.post("/sensor", json={"name": "alpha", "temperature": 10.0})
+    second = client.post("/sensor", json={"name": "beta", "temperature": 35.0})
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+
+    filtered = client.get("/sensor", params={"min_temperature": 20, "max_temperature": 40})
+    assert filtered.status_code == 200
+    assert [item["name"] for item in filtered.json()] == ["beta"]
+
+    invalid = client.post("/sensor", json={"name": "test", "temperature": 10.0})
+    assert invalid.status_code == 422
