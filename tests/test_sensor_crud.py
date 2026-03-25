@@ -1,3 +1,11 @@
+import sys
+from pathlib import Path
+
+# Ensure the project root is importable when pytest runs from a different working directory.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -67,7 +75,10 @@ def test_filter_and_validation(client):
     assert first.status_code == 201
     assert second.status_code == 201
 
-    filtered = client.get("/sensor", params={"min_temperature": 20, "max_temperature": 40})
+    filtered = client.get(
+        "/sensor",
+        params={"min_temperature": 20, "max_temperature": 40},
+    )
     assert filtered.status_code == 200
     assert [item["name"] for item in filtered.json()] == ["beta"]
 
