@@ -2,8 +2,8 @@ from fastapi import APIRouter
 from typing import List
 from pathlib import Path
 
-from schemas import Sensor, SensorResponse, SensorUpdate, SensorCreateResponse, SensorMessageResponse
-from service import create_sensor, get_sensors, get_sensor_stats, get_sensor, delete_sensor, update_sensor
+from schemas import Sensor, SensorResponse, SensorUpdate, SensorCreateResponse, SensorMessageResponse, DeleteSensorsResponse
+from service import create_sensor, get_sensors, get_sensor_stats, get_sensor, delete_sensor, update_sensor, delete_all_sensors_with_name
 from service import simulate_sensors_from_file as _simulate_sensors_from_file
 
 router = APIRouter()
@@ -68,6 +68,17 @@ def delete_sensor_by_id(sensor_id: int):
     Returns a message and the deleted sensor data on success.
     """
     return delete_sensor(sensor_id)
+
+# -------------------------
+# DELETE Sensors by Name
+# -------------------------
+@router.delete("/sensor/name/{name}", response_model=DeleteSensorsResponse)
+def delete_sensor_by_name_route(name: str):
+    """Delete all sensors with the given name, or return 404 if not found.
+
+    Returns a message and the count of deleted sensors on success.
+    """
+    return delete_all_sensors_with_name(name)
 
 # -------------------------
 # UPDATE Sensor by ID

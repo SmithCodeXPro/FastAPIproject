@@ -15,12 +15,12 @@ FastAPI Sensor API - Store and retrieve sensor temperature readings.
 # ----------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Run init_db on startup, cleanup on shutdown."""
+    """Initialize the database on startup and release app control on shutdown."""
 
-    # Create database tables
+    # Create database tables before serving requests.
     init_db()
 
-    # Yield control to the FastAPI app
+    # Hand control back to FastAPI for the app lifetime.
     yield
 
 # Register lifespan handler with the app

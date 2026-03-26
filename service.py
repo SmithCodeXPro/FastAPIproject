@@ -208,6 +208,31 @@ def delete_sensor(sensor_id: int) -> SensorMessageResponse:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def delete_all_sensors_with_name(name: str) -> dict:
+    """Delete all sensors with the given name, or return 404 if not found."""
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("SELECT COUNT(*) AS deleted_count FROM sensors WHERE name = ?", (name,))
+            row = cursor.fetchone()
+            deleted_count = row["deleted_count"] if row else 0
+
+            if deleted_count == 0:
+                raise HTTPException(status_code=404, detail="Sensor not found")
+
+            cursor.execute("DELETE FROM sensors WHERE name = ?", (name,))
+            conn.commit()
+
+            return {
+                "success": True,
+                "message": "Sensors deleted",
+                "deleted_count": deleted_count,
+            }
+    except sqlite3.Error as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 def update_sensor(sensor_id: int, sensor_update: SensorUpdate) -> SensorMessageResponse:
     """
     Update the sensor with the given ID using the provided fields (name and/or temperature).
