@@ -46,9 +46,9 @@ def get_all_sensors(
 # GET Sensor Statistics
 # ----------------------
 @router.get("/sensor/stats")
-def get_sensor_statistics():
+def get_sensor_statistics(name: str | None = None):
     """Return aggregated statistics for all sensor readings."""
-    return get_sensor_stats()
+    return get_sensor_stats(name)
 
 # ----------------------
 # GET Sensor by ID

@@ -98,14 +98,15 @@ def get_sensors(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def get_sensor_stats() -> dict:
+def get_sensor_stats(name: str | None = None) -> dict:
     """Return aggregated statistics for all sensor readings."""
     try:
         with get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT
+            if name is not None:
+                cursor.execute(
+                    """
+                    SELECT
                     COUNT(*) AS total_readings,
                     COUNT(DISTINCT name) AS unique_sensors,
                     AVG(temperature) AS avg_temperature,
@@ -114,9 +115,25 @@ def get_sensor_stats() -> dict:
                     SUM(CASE WHEN temperature > 30 THEN 1 ELSE 0 END) AS alert_count,
                     MIN(timestamp) AS earliest_timestamp,
                     MAX(timestamp) AS latest_timestamp
-                FROM sensors
-                """
-            )
+                    FROM sensors WHERE name = ?
+                    """,
+                    (name,)
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT
+                    COUNT(*) AS total_readings,
+                    COUNT(DISTINCT name) AS unique_sensors,
+                    AVG(temperature) AS avg_temperature,
+                    MIN(temperature) AS min_temperature,
+                    MAX(temperature) AS max_temperature,
+                    SUM(CASE WHEN temperature > 30 THEN 1 ELSE 0 END) AS alert_count,
+                    MIN(timestamp) AS earliest_timestamp,
+                    MAX(timestamp) AS latest_timestamp
+                    FROM sensors
+                    """
+                )
             row = cursor.fetchone()
             if not row:
                 return {
