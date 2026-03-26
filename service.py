@@ -52,6 +52,8 @@ def get_sensors(
     name: str | None = None,
     min_temperature: float | None = None,
     max_temperature: float | None = None,
+    limit: int = 10,
+    offset: int = 0,
 ) -> List[SensorResponse]:
     """Return filtered sensor readings.
 
@@ -82,7 +84,8 @@ def get_sensors(
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
 
-    query += " ORDER BY timestamp DESC"
+    query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
 
     try:
         with get_connection() as conn:

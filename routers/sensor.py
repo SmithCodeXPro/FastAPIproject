@@ -26,16 +26,21 @@ def get_all_sensors(
     name: str | None = None,
     min_temperature: float | None = None,
     max_temperature: float | None = None,
+    limit: int = 10,
+    offset: int = 0,
 ):
     """Return filtered sensor readings.
 
     - name: filter by exact sensor name (case-sensitive). Use partial match with SQL `LIKE` by adjusting this code.
     - min_temperature: include sensors with temperature >= this value.
     - max_temperature: include sensors with temperature <= this value.
+    - limit: maximum number of results to return.
+    - offset: number of results to skip (for pagination).
 
     Returns an empty list if no sensors are found.
     """
-    return get_sensors(name, min_temperature, max_temperature)
+    return get_sensors(name, min_temperature, max_temperature, limit, offset)
+
 
 # ----------------------
 # GET Sensor Statistics
