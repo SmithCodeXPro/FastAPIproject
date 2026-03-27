@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 from typing import List
 import json
+import logging
 import sqlite3
 from pathlib import Path
 from datetime import datetime, timezone
@@ -8,11 +9,19 @@ from datetime import datetime, timezone
 from schemas import Sensor, SensorResponse, SensorUpdate, SensorCreateResponse, SensorMessageResponse
 from db import get_connection, parse_timestamp
 
+logger = logging.getLogger(__name__)
+
 
 def create_sensor(sensor: Sensor) -> SensorCreateResponse:
     """Add one sensor reading. alert=True if temperature > 30°C."""
     
     alert = sensor.temperature > 30
+    logger.info(
+        "Creating sensor reading for name=%s temperature=%s alert=%s",
+        sensor.name,
+        sensor.temperature,
+        alert,
+    )
 
     # Insert sensor into database
     try:
@@ -35,9 +44,11 @@ def create_sensor(sensor: Sensor) -> SensorCreateResponse:
 
     # Return error if database operation fails
     except sqlite3.Error as e:
+        logger.exception("Failed to create sensor reading for name=%s", sensor.name)
         raise HTTPException(status_code=500, detail=str(e))
 
     # Return success message and sensor details
+    logger.info("Created sensor reading id=%s name=%s", last_id, sensor.name)
     return SensorCreateResponse(
         message="sensor created",
         id=last_id,
@@ -92,9 +103,19 @@ def get_sensors(
             cursor = conn.cursor()
             cursor.execute(query, tuple(params))
             rows = cursor.fetchall()
+            logger.debug(
+                "Fetched %s sensor readings with filters name=%s min_temperature=%s max_temperature=%s limit=%s offset=%s",
+                len(rows),
+                name,
+                min_temperature,
+                max_temperature,
+                limit,
+                offset,
+            )
             return [SensorResponse(**parse_timestamp(row)) for row in rows]
 
     except sqlite3.Error as e:
+        logger.exception("Failed to fetch sensor readings")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -136,6 +157,7 @@ def get_sensor_stats(name: str | None = None) -> dict:
                 )
             row = cursor.fetchone()
             if not row:
+                logger.debug("Sensor stats requested for name=%s but no rows were found", name)
                 return {
                     "total_readings": 0,
                     "unique_sensors": 0,
@@ -147,7 +169,7 @@ def get_sensor_stats(name: str | None = None) -> dict:
                     "latest_timestamp": None,
                 }
 
-            return {
+            stats = {
                 "total_readings": row["total_readings"],
                 "unique_sensors": row["unique_sensors"],
                 "avg_temperature": row["avg_temperature"],
@@ -157,7 +179,10 @@ def get_sensor_stats(name: str | None = None) -> dict:
                 "earliest_timestamp": datetime.strptime(row["earliest_timestamp"], '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc) if row["earliest_timestamp"] else None,
                 "latest_timestamp": datetime.strptime(row["latest_timestamp"], '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc) if row["latest_timestamp"] else None,
             }
+            logger.debug("Computed sensor stats for name=%s", name)
+            return stats
     except sqlite3.Error as e:
+        logger.exception("Failed to compute sensor stats for name=%s", name)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -173,11 +198,14 @@ def get_sensor(sensor_id: int) -> SensorResponse:
 
             row = cursor.fetchone() # Get the first row from the result set 
             if not row:
+                logger.debug("Sensor id=%s not found", sensor_id)
                 raise HTTPException(status_code=404, detail="Sensor not found")
+            logger.debug("Fetched sensor id=%s", sensor_id)
             return SensorResponse(**parse_timestamp(row)) # Convert sqlite3.Row to dict and then to SensorResponse object (using Pydantic's **kwargs)
 
     # Return error if database operation fails
     except sqlite3.Error as e:
+        logger.exception("Failed to fetch sensor id=%s", sensor_id)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -194,17 +222,20 @@ def delete_sensor(sensor_id: int) -> SensorMessageResponse:
             cursor.execute("SELECT id, name, temperature, timestamp FROM sensors WHERE id = ?", (sensor_id,))
             row = cursor.fetchone()
             if not row:
+                logger.debug("Sensor id=%s not found for delete", sensor_id)
                 raise HTTPException(status_code=404, detail="Sensor not found")
             sensor_data = parse_timestamp(row)
 
             cursor.execute("DELETE FROM sensors WHERE id = ?", (sensor_id,))
             conn.commit()
+            logger.info("Deleted sensor id=%s", sensor_id)
 
             return SensorMessageResponse(
                 message="Sensor deleted",
                 sensor=SensorResponse(**sensor_data)
             )
     except sqlite3.Error as e:
+        logger.exception("Failed to delete sensor id=%s", sensor_id)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -219,10 +250,12 @@ def delete_all_sensors_with_name(name: str) -> dict:
             deleted_count = row["deleted_count"] if row else 0
 
             if deleted_count == 0:
+                logger.debug("No sensors found for delete by name=%s", name)
                 raise HTTPException(status_code=404, detail="Sensor not found")
 
             cursor.execute("DELETE FROM sensors WHERE name = ?", (name,))
             conn.commit()
+            logger.info("Deleted %s sensors with name=%s", deleted_count, name)
 
             return {
                 "success": True,
@@ -230,6 +263,7 @@ def delete_all_sensors_with_name(name: str) -> dict:
                 "deleted_count": deleted_count,
             }
     except sqlite3.Error as e:
+        logger.exception("Failed to delete sensors with name=%s", name)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -249,6 +283,7 @@ def update_sensor(sensor_id: int, sensor_update: SensorUpdate) -> SensorMessageR
             cursor.execute("SELECT id, name, temperature, timestamp FROM sensors WHERE id = ?", (sensor_id,))
             row = cursor.fetchone()
             if not row:
+                logger.debug("Sensor id=%s not found for update", sensor_id)
                 raise HTTPException(status_code=404, detail="Sensor not found")
 
             # Get new values, fallback to old values if not provided
@@ -267,20 +302,25 @@ def update_sensor(sensor_id: int, sensor_update: SensorUpdate) -> SensorMessageR
             cursor.execute("SELECT id, name, temperature, timestamp FROM sensors WHERE id = ?", (sensor_id,))
             updated_row = cursor.fetchone()
             updated_data = parse_timestamp(updated_row) if updated_row else current_data
+            logger.info("Updated sensor id=%s", sensor_id)
 
             return SensorMessageResponse(
                 message="Sensor updated",
                 sensor=SensorResponse(**updated_data)
             )
     except sqlite3.Error as e:
+        logger.exception("Failed to update sensor id=%s", sensor_id)
         raise HTTPException(status_code=500, detail=str(e))
 
 
 def simulate_sensors_from_file(file_path: Path) -> dict:
     """Load sensors from JSON and insert into DB. Returns count and alerts."""
 
+    logger.info("Simulating sensors from file=%s", file_path)
+
     # Check if file exists
     if not file_path.exists():
+        logger.warning("Sensor data file not found: %s", file_path)
         raise HTTPException(status_code=404, detail=f"Sensor data file not found: {file_path}")
 
     # Load JSON data
@@ -288,6 +328,7 @@ def simulate_sensors_from_file(file_path: Path) -> dict:
         with open(file_path, "r") as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
+        logger.warning("Invalid JSON in sensor data file=%s: %s", file_path, e)
         raise HTTPException(status_code=400, detail=f"Invalid JSON in file: {e}")
 
     if not isinstance(data, list):
@@ -310,9 +351,17 @@ def simulate_sensors_from_file(file_path: Path) -> dict:
             stored = len(sensors)
             alerts = sum(1 for s in sensors if s.temperature > 30)
             conn.commit()
+            logger.info(
+                "Simulated %s sensor readings from file=%s with %s alerts",
+                stored,
+                file_path,
+                alerts,
+            )
     except (ValueError, TypeError) as e:
+        logger.warning("Invalid sensor data in file=%s: %s", file_path, e)
         raise HTTPException(status_code=400, detail=f"Invalid sensor data: {e}")
     except sqlite3.Error as e:
+        logger.exception("Failed to simulate sensors from file=%s", file_path)
         raise HTTPException(status_code=500, detail=str(e))
 
     # Return success message and counts

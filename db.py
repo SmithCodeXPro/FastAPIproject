@@ -1,8 +1,10 @@
 import sqlite3
+import logging
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
 DATABASE = Path(__file__).parent / "sensors.db"
+logger = logging.getLogger(__name__)
 
 
 def parse_timestamp(row):
@@ -38,7 +40,7 @@ def init_db():
             )
             conn.commit()
     except sqlite3.Error as e:
-        print("Database initialization error:", e)
+        logger.exception("Database initialization error")
 
 
 def delete_older_than(days: int = 30) -> int:
@@ -56,5 +58,5 @@ def delete_older_than(days: int = 30) -> int:
             conn.commit()
         return deleted if deleted is not None else 0
     except sqlite3.Error as e:
-        print("Error deleting old records:", e)
+        logger.exception("Error deleting old records")
         return 0
