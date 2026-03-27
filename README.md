@@ -12,6 +12,7 @@ A REST API to store and retrieve sensor temperature readings using FastAPI and S
 - **Query stats** – GET `/sensor/stats` (aggregate metrics)
 - **Batch load simulator** – POST `/simulate` from `sensor_data.json`
 - **Alerts** – temperature above 30°C sets `alert: true` on insert
+- **Auto cleanup** – records older than 30 days are removed automatically on app startup
 
 ## Tech Stack
 
@@ -168,6 +169,7 @@ FastAPIproject/
 ## Notes
 
 - SQLite DB is created automatically in project directory.
+- Old sensor rows older than 30 days are cleaned up automatically when the app starts.
 - No additional DB server required.
 - `name` cannot be `test` or `invalid` by business rule.
 - Temperatures are validated in range [-50, 150].

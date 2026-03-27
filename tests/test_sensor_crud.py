@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from datetime import datetime, timezone
 
 # Ensure the project root is importable when pytest runs from a different working directory.
 ROOT = Path(__file__).resolve().parents[1]
@@ -84,3 +85,31 @@ def test_filter_and_validation(client):
 
     invalid = client.post("/sensor", json={"name": "test", "temperature": 10.0})
     assert invalid.status_code == 422
+
+
+def test_startup_auto_cleanup_removes_old_records(tmp_path, monkeypatch):
+    test_db = tmp_path / "test_sensors.db"
+    monkeypatch.setattr(db_module, "DATABASE", test_db)
+
+    from db import init_db, get_connection
+
+    init_db()
+
+    old_timestamp = "2000-01-01 00:00:00"
+    fresh_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+    with get_connection() as conn:
+        conn.executemany(
+            "INSERT INTO sensors (name, temperature, timestamp) VALUES (?, ?, ?)",
+            [
+                ("old-sensor", 10.0, old_timestamp),
+                ("fresh-sensor", 20.0, fresh_timestamp),
+            ],
+        )
+        conn.commit()
+
+    with TestClient(app) as test_client:
+        response = test_client.get("/sensor")
+
+    assert response.status_code == 200
+    assert [item["name"] for item in response.json()] == ["fresh-sensor"]

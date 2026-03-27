@@ -1,6 +1,6 @@
 import sqlite3
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 DATABASE = Path(__file__).parent / "sensors.db"
 
@@ -39,3 +39,22 @@ def init_db():
             conn.commit()
     except sqlite3.Error as e:
         print("Database initialization error:", e)
+
+
+def delete_older_than(days: int = 30) -> int:
+    """Delete sensor records older than `days` days.
+
+    Returns the number of rows deleted.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff_str = cutoff.strftime('%Y-%m-%d %H:%M:%S')
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM sensors WHERE timestamp < ?", (cutoff_str,))
+            deleted = cur.rowcount
+            conn.commit()
+        return deleted if deleted is not None else 0
+    except sqlite3.Error as e:
+        print("Error deleting old records:", e)
+        return 0
